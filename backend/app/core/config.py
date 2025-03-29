@@ -22,18 +22,23 @@ class Settings(BaseSettings):
     WEATHER_API_MAX_RETRIES: int = 3
     
     class Config:
-        env_file = "/app/.env"  # Use absolute path in container
+        env_file = ".env"
         case_sensitive = True
 
 @lru_cache()
 def get_settings() -> Settings:
     # Log environment variables (without exposing sensitive data)
-    env_file_path = "/app/.env"
+    env_file_path = ".env"
     logger.info(f"Loading settings from .env file: {os.path.exists(env_file_path)}")
     logger.info(f"Environment variables present: {list(os.environ.keys())}")
     
-    settings = Settings()
-    logger.info(f"Settings loaded successfully")
-    return settings
+    try:
+        settings = Settings()
+        logger.info(f"Settings loaded successfully")
+        return settings
+    except Exception as e:
+        logger.error(f"Error loading settings: {str(e)}")
+        raise
 
+# Initialize settings
 settings = get_settings() 

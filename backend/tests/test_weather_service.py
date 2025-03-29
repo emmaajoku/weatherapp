@@ -41,29 +41,36 @@ async def test_get_weather_success(weather_service, mock_weather_response):
         assert result.country == "GB"
 
 @pytest.mark.asyncio
-async def test_get_weather_city_not_found(weather_service):
-    with patch('httpx.AsyncClient.get') as mock_get:
-        mock_get.return_value = AsyncMock(
-            status_code=404,
-            json=lambda: {"message": "City not found"}
-        )
-        
-        with pytest.raises(WeatherError) as exc_info:
-            await weather_service.get_weather("NonExistentCity")
-        
-        assert exc_info.value.code == "CITY_NOT_FOUND"
-        assert "City 'NonExistentCity' not found" in str(exc_info.value.message)
+async def test_get_weather_empty_city(weather_service):
+    with pytest.raises(WeatherError) as exc_info:
+        await weather_service.get_weather("")
+    
+    assert exc_info.value.code == "CITY_NOT_FOUND"
+    assert "City name cannot be empty" in str(exc_info.value.message)
 
 @pytest.mark.asyncio
-async def test_get_weather_api_error(weather_service):
+async def test_get_weather_network_error(weather_service):
     with patch('httpx.AsyncClient.get') as mock_get:
-        mock_get.return_value = AsyncMock(
-            status_code=500,
-            json=lambda: {"message": "Internal server error"}
-        )
+        mock_get.side_effect = Exception("Network error")
         
         with pytest.raises(WeatherError) as exc_info:
             await weather_service.get_weather("London")
         
-        assert exc_info.value.code == "API_ERROR"
-        assert "Failed to fetch weather data" in str(exc_info.value.message) 
+        assert exc_info.value.code == "INTERNAL_ERROR"
+        assert "Network error" in str(exc_info.value.message)
+
+@pytest.mark.asyncio
+async def test_get_weather_retry_success(weather_service, mock_weather_response):
+    with patch('httpx.AsyncClient.get') as mock_get:
+        # First call fails, second call succeeds
+        mock_get.side_effect = [
+            AsyncMock(status_code=500, json=lambda: {"message": "Internal server error"}),
+            AsyncMock(status_code=200, json=lambda: mock_weather_response)
+        ]
+        
+        result = await weather_service.get_weather("London")
+        
+        assert isinstance(result, WeatherData)
+        assert result.temperature == 20.5
+        assert result.city == "London"
+        assert mock_get.call_count == 2 

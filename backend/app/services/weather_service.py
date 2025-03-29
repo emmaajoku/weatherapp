@@ -24,6 +24,9 @@ class WeatherService:
         """
         Fetch weather data for a given city from OpenWeather API
         """
+        if not city or not city.strip():
+            raise WeatherError("City name cannot be empty", "CITY_NOT_FOUND")
+
         if not self.api_key:
             raise WeatherError("OpenWeather API key is not configured", "API_KEY_MISSING")
 
@@ -39,9 +42,9 @@ class WeatherService:
                     logger.info(f"Making request to {url} for city: {city}")
                     
                     response = await client.get(url, params=params)
-                    response.raise_for_status()
+                    response.raise_for_status()  # This will raise HTTPStatusError for non-200 status codes
+                    
                     data = response.json()
-
                     return WeatherData(
                         temperature=data["main"]["temp"],
                         humidity=data["main"]["humidity"],
@@ -58,15 +61,30 @@ class WeatherService:
                             message=f"City '{city}' not found",
                             code="CITY_NOT_FOUND"
                         )
-                    if e.response.status_code == 401:
+                    elif e.response.status_code == 401:
                         raise WeatherError(
                             message="Invalid API key",
                             code="API_KEY_INVALID"
                         )
+                    elif e.response.status_code == 500:
+                        if attempt == self.max_retries - 1:
+                            raise WeatherError(
+                                message="Failed to fetch weather data",
+                                code="API_ERROR"
+                            )
+                        continue
+                    else:
+                        if attempt == self.max_retries - 1:
+                            raise WeatherError(
+                                message=f"Unexpected status code: {e.response.status_code}",
+                                code="API_ERROR"
+                            )
+                        continue
+                except httpx.RequestError as e:
                     if attempt == self.max_retries - 1:
                         raise WeatherError(
-                            message="Failed to fetch weather data",
-                            code="API_ERROR"
+                            message=str(e),
+                            code="INTERNAL_ERROR"
                         )
                     continue
                 except Exception as e:
