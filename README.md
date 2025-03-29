@@ -37,8 +37,8 @@ weather-app/
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd weather-app
+git clone https://github.com/emmaajoku/weatherapp.git
+cd weatherapp
 ```
 
 2. Set up environment variables:
